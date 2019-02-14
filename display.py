@@ -162,15 +162,16 @@ class IMU:
 
 
 class ComplementaryFilter:
-    def __init__(self):
+    def __init__(self, alpha=0.1):
         self.q = Quaternion.Identity()
+        self.alpha = alpha
 
     def update_gyro(self, w, dt):
         gyro_quat = Quaternion.fromGyro(w, dt)
         self.q =  self.q @ gyro_quat
 
     def update_acel(self, accel_vect):
-        alpha = 0.3
+        alpha = self.alpha
 
         if accel_vect is None:
             return
@@ -190,7 +191,7 @@ class ComplementaryFilter:
         return self.q
 
 class MEKF:
-    def __init__(self, verbose=0):
+    def __init__(self, verbose=0, Q_gyro=1e-6, Q_bias=1e-12, R=100):
         self.q = Quaternion.Identity()
 
         self.bias = np.array([0.0,0.0,0.0])
@@ -198,8 +199,8 @@ class MEKF:
         self.sigma = np.diag([0.1, 0.1, 0.1, 0.5, 0.5, 0.5])
 
         # self.Q = 0.02 * np.eye(6) * 0.05
-        self.Q = np.diag( [0.02 * 0.05] * 3 + [1e-9]*3 )
-        self.R = 100  * np.eye(3)
+        self.Q = np.diag( [Q_gyro] * 3 + [1e-9]*3 )
+        self.R = R * np.eye(3)
 
         self.verbose = verbose
 
