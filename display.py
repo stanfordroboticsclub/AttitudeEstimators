@@ -1,6 +1,6 @@
 
-from mpl_toolkits.mplot3d import Axes3D
-import matplotlib.pyplot as plt
+#from mpl_toolkits.mplot3d import Axes3D
+#import matplotlib.pyplot as plt
 
 import numpy as np
 
@@ -11,6 +11,9 @@ import time
 
 
 class Quaternion:
+    
+    def __str__(self):
+        return str(self.q)
 
     @classmethod
     def Identity(cls):
@@ -187,7 +190,7 @@ class ComplementaryFilter:
         return self.q
 
 class MEKF:
-    def __init__(self):
+    def __init__(self, verbose=0):
         self.q = Quaternion.Identity()
 
         self.bias = np.array([0.0,0.0,0.0])
@@ -197,6 +200,8 @@ class MEKF:
         # self.Q = 0.02 * np.eye(6) * 0.05
         self.Q = np.diag( [0.02 * 0.05] * 3 + [1e-9]*3 )
         self.R = 100  * np.eye(3)
+
+        self.verbose = verbose
 
     def update_gyro(self, w, dt):
 
@@ -224,16 +229,17 @@ class MEKF:
         # sim = self.q.T.rotate( [0,0,-1] ) * np.linalg.norm(accel_vect)
         accel_vect = accel_vect/np.linalg.norm(accel_vect)
         # accel_vect = accel_vect/9.8
-
-        print("sim",sim)
-        print("accel", accel_vect)
+        
+        if self.verbose > 0:
+            print("sim",sim)
+            print("accel", accel_vect)
 
         # has nothing to do with quaternion
         # just using a convenience function
         C = 2*Quaternion.skew_matrix(sim)
         C = np.block( [[ C, np.zeros((3,3)) ]])
 
-        print("start")
+        #print("start")
         # print("sigma", self.sigma)
         # print("C", C)
         K = self.sigma @ C.T @ np.linalg.inv(C @ self.sigma @ C.T + self.R)
@@ -243,13 +249,12 @@ class MEKF:
         nudge = correction[:3]
         bias_fix = correction[3:]
 
-        print(bias_fix.shape)
-
         self.bias += bias_fix
 
         # print("nudge",nudge)
-        print("covars", np.diag(self.sigma))
-        print("bias", self.bias)
+        if self.verbose > 0:
+            print("covars", np.diag(self.sigma))
+            print("bias", self.bias)
 
         self.q = self.q @ Quaternion.fromNudge(nudge)
         self.sigma = self.sigma - K @ C @ self.sigma
