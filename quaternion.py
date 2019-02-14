@@ -2,6 +2,9 @@ import numpy as np
 
 class Quaternion:
 
+    def __str__(self):
+        return str(self.q)
+
     @classmethod
     def Identity(cls):
         return Quaternion( [1, 0, 0, 0] )

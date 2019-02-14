@@ -2,16 +2,15 @@ from quaternion import Quaternion
 import numpy as np
 
 class ComplementaryFilter:
-    def __init__(self):
+    def __init__(self, alpha=0.01):
         self.q = Quaternion.Identity()
+        self.alpha = alpha
 
     def update_gyro(self, w, dt):
         gyro_quat = Quaternion.fromGyro(w, dt)
         self.q =  self.q @ gyro_quat
 
     def update_acel(self, accel_vect):
-        alpha = 0.01
-
         if accel_vect is None:
             return
         sim = self.q.T.rotate( [0,0,-1] )
@@ -22,7 +21,7 @@ class ComplementaryFilter:
         # to modify the sim we go from the real to simulated gravity vector
         axis = np.cross(accel_vect, sim)
 
-        offset = Quaternion.fromAxisAngle(axis, alpha*angle)
+        offset = Quaternion.fromAxisAngle(axis, self.alpha*angle)
         self.q =  self.q @ offset
 
 
@@ -30,7 +29,7 @@ class ComplementaryFilter:
         return self.q
 
 class MEKF:
-    def __init__(self):
+    def __init__(self, Q_gyro=1e-3, Q_bias=1e-12, R=10):
         self.q = Quaternion.Identity()
 
         self.bias = np.array([0.0,0.0,0.0])
@@ -38,8 +37,8 @@ class MEKF:
         self.sigma = np.diag([0.1, 0.1, 0.1, 0.5, 0.5, 0.5])
 
         # self.Q = 0.02 * np.eye(6) * 0.05
-        self.Q = np.diag( [0.02 * 0.05] * 3 + [1e-12]*3 )
-        self.R = 10  * np.eye(3)
+        self.Q = np.diag( [Q_gyro] * 3 + [Q_bias]*3 )
+        self.R = R  * np.eye(3)
 
     def update_gyro(self, w, dt):
 
@@ -68,15 +67,15 @@ class MEKF:
         accel_vect = accel_vect/np.linalg.norm(accel_vect)
         # accel_vect = accel_vect/9.8
 
-        print("sim",sim)
-        print("accel", accel_vect)
+        # print("sim",sim)
+        # print("accel", accel_vect)
 
         # has nothing to do with quaternion
         # just using a convenience function
         C = 2*Quaternion.skew_matrix(sim)
         C = np.block( [[ C, np.zeros((3,3)) ]])
 
-        print("start")
+        # print("start")
         # print("sigma", self.sigma)
         # print("C", C)
         K = self.sigma @ C.T @ np.linalg.inv(C @ self.sigma @ C.T + self.R)
@@ -86,13 +85,13 @@ class MEKF:
         nudge = correction[:3]
         bias_fix = correction[3:]
 
-        print(bias_fix.shape)
+        # print(bias_fix.shape)
 
         self.bias += bias_fix
 
         # print("nudge",nudge)
-        print("covars", np.diag(self.sigma))
-        print("bias", self.bias)
+        # print("covars", np.diag(self.sigma))
+        # print("bias", self.bias)
 
         self.q = self.q @ Quaternion.fromNudge(nudge)
         self.sigma = self.sigma - K @ C @ self.sigma
