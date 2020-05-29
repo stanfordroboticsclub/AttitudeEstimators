@@ -4,6 +4,9 @@ import matplotlib.pyplot as plt
 
 import numpy as np
 
+import UDPComms
+import time
+
 
 
 
@@ -39,59 +42,66 @@ class Quaternion:
         return out.q[1:]
 
 
-fig = plt.figure()
-ax = fig.gca(projection='3d')
+class Display:
 
-plt.ion()
+    def __init__(self):
+        self.fig = plt.figure()
+        self.ax = self.fig.gca(projection='3d')
+        plt.ion()
 
-X = np.array([[-1 ,1],[-1, 1]])
-Y = np.array([[ 1 ,1],[-1,-1]])
-Z = np.array([[-1,-1],[-1,-1]])
+        X = np.array([[-1 ,1],[-1, 1]])
+        Y = np.array([[ 1 ,1],[-1,-1]])
+        Z = np.array([[-1,-1],[-1,-1]])
 
-scale = 3
-ground = ax.plot_surface(scale* X, scale*Y, scale*Z, color='g')
-bounds = scale + 0.01
-ax.set_zlim(-bounds, bounds)
+        scale = 3
+        self.ground = self.ax.plot_surface(scale* X, scale*Y, scale*Z, color='g')
+        bounds = scale + 0.01
+        self.ax.set_zlim(-bounds, bounds)
 
-verts = [ [-1, 2, 0],
-          [-1,-2, 0],
-          [ 1, 2, 0],
-          [ 1,-2, 0]]
+        self.verts = [[-1, 2, 0],
+                      [-1,-2, 0],
+                      [ 1, 2, 0],
+                      [ 1,-2, 0]]
+        self.s = None
 
-def plot_surface(verts):
-    l = np.array(verts).T
-    x = l[0].reshape((2,2))
-    y = l[1].reshape((2,2))
-    z = l[2].reshape((2,2))
+    def plot_quat(self,q):
+        verts = [q.rotate(v) for v in self.verts]
+        l = np.array(verts).T
+        x = l[0].reshape((2,2))
+        y = l[1].reshape((2,2))
+        z = l[2].reshape((2,2))
 
-    return ax.plot_surface(x, y, z, linewidth=0, color='r')
+        if self.s != None:
+            self.s.remove()
+        self.s = self.ax.plot_surface(x, y, z, linewidth=0, color='r')
 
-import UDPComms
-import time
-imu = UDPComms.Subscriber(8007)
 
-last_time = time.time()
-def get_imu_quat():
-    global last_time
-    try:
-        ax,ay,az, gx, gy, gz = imu.get()
-    except UDPComms.timeout:
-        return Quaternion.fromAxisAngle( [0,0,1], 0)
-    dt = time.time() - last_time
-    print(dt)
-    last_time = time.time()
-    gyro = [-gx, -gy, -gz] # reversed for some reason?!
-    angle = np.linalg.norm(gyro) * dt
-    return Quaternion.fromAxisAngle( gyro, angle )
+class IMU:
 
-s = plot_surface(  verts )
+    def __init__(self):
+        self.sub = UDPComms.Subscriber(8007)
+        self.last_time = time.time()
 
-a = 0
+    def get_quat(self):
+        try:
+            ax,ay,az, gx, gy, gz = self.sub.get()
+        except UDPComms.timeout:
+            return Quaternion.fromAxisAngle( [0,0,1], 0)
+        dt = time.time() - self.last_time
+        print(dt)
+        self.last_time = time.time()
+        gyro = [-gx, -gy, -gz] # reversed for some reason?!
+        angle = np.linalg.norm(gyro) * dt
+        return Quaternion.fromAxisAngle( gyro, angle )
+
+
 q = Quaternion.fromAxisAngle( [0,0,1], 0 )
+imu = IMU()
+display = Display()
+
 while 1:
-    q =  q @ get_imu_quat()
-    s.remove()
-    s = plot_surface( [q.rotate(v) for v in verts] )
+    q =  q @ imu.get_quat()
+    display.plot_quat(q)
     plt.pause(0.01)
 
 
