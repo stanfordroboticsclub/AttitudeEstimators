@@ -11,7 +11,7 @@ class Quaternion:
 
     @classmethod
     def fromAxisAngle(cls, axis, angle):
-        axis = axis/np.sum(axis)
+        axis = axis/np.linalg.norm(axis)
         c = np.cos(angle/2)
         s = np.sin(angle/2)
         return Quaternion( [c, s * axis[0], s * axis[1], s * axis[2]] )
@@ -48,7 +48,10 @@ X = np.array([[-1 ,1],[-1, 1]])
 Y = np.array([[ 1 ,1],[-1,-1]])
 Z = np.array([[-1,-1],[-1,-1]])
 
-ground = ax.plot_surface(3* X, 3*Y, Z, linewidth=0, color='g')
+scale = 3
+ground = ax.plot_surface(scale* X, scale*Y, scale*Z, color='g')
+bounds = scale + 0.01
+ax.set_zlim(-bounds, bounds)
 
 verts = [ [-1, 2, 0],
           [-1,-2, 0],
@@ -60,20 +63,33 @@ def plot_surface(verts):
     x = l[0].reshape((2,2))
     y = l[1].reshape((2,2))
     z = l[2].reshape((2,2))
-    # print(x)
-    # print(y)
 
     return ax.plot_surface(x, y, z, linewidth=0, color='r')
 
+import UDPComms
+import time
+imu = UDPComms.Subscriber(8007)
+
+last_time = time.time()
+def get_imu_quat():
+    global last_time
+    try:
+        ax,ay,az, gx, gy, gz = imu.get()
+    except UDPComms.timeout:
+        return Quaternion.fromAxisAngle( [0,0,1], 0)
+    dt = time.time() - last_time
+    print(dt)
+    last_time = time.time()
+    gyro = [-gx, -gy, -gz] # reversed for some reason?!
+    angle = np.linalg.norm(gyro) * dt
+    return Quaternion.fromAxisAngle( gyro, angle )
+
 s = plot_surface(  verts )
 
-# Customize the z axis.
-ax.set_zlim(-1.01, 1.01)
-
 a = 0
+q = Quaternion.fromAxisAngle( [0,0,1], 0 )
 while 1:
-    a += 0.01
-    q = Quaternion.fromAxisAngle( [0,0,1], a )
+    q =  q @ get_imu_quat()
     s.remove()
     s = plot_surface( [q.rotate(v) for v in verts] )
     plt.pause(0.01)
