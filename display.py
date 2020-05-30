@@ -23,8 +23,8 @@ class Quaternion:
         self.q = np.array(array)
 
     def __matmul__(self, other):
-        w0, x0, y0, z0 = self.q
-        w1, x1, y1, z1 = other.q
+        w0, x0, y0, z0 = other.q
+        w1, x1, y1, z1 = self.q
         return Quaternion([-x1 * x0 - y1 * y0 - z1 * z0 + w1 * w0,
                          x1 * w0 + y1 * z0 - z1 * y0 + w1 * x0,
                          -x1 * z0 + y1 * w0 + z1 * x0 + w1 * y0,
@@ -47,14 +47,14 @@ class Display:
     def __init__(self):
         self.fig = plt.figure()
         self.ax = self.fig.gca(projection='3d')
-        plt.ion()
 
         X = np.array([[-1 ,1],[-1, 1]])
         Y = np.array([[ 1 ,1],[-1,-1]])
         Z = np.array([[-1,-1],[-1,-1]])
 
         scale = 3
-        self.ground = self.ax.plot_surface(scale* X, scale*Y, scale*Z, color='g')
+        self.ground = self.ax.plot_surface(scale* X, scale*Y, scale*Z,
+                                           color='g',zorder=1)
         bounds = scale + 0.01
         self.ax.set_zlim(-bounds, bounds)
 
@@ -73,7 +73,7 @@ class Display:
 
         if self.s != None:
             self.s.remove()
-        self.s = self.ax.plot_surface(x, y, z, linewidth=0, color='r')
+        self.s = self.ax.plot_surface(x, y, z, linewidth=0, color='r',zorder=2)
 
 
 class IMU:
@@ -82,7 +82,7 @@ class IMU:
         self.sub = UDPComms.Subscriber(8007)
         self.last_time = time.time()
 
-    def get_quat(self):
+    def get_gyro_quat(self):
         try:
             ax,ay,az, gx, gy, gz = self.sub.get()
         except UDPComms.timeout:
@@ -90,19 +90,57 @@ class IMU:
         dt = time.time() - self.last_time
         print(dt)
         self.last_time = time.time()
-        gyro = [-gx, -gy, -gz] # reversed for some reason?!
+        gyro = [gx, gy, gz]
         angle = np.linalg.norm(gyro) * dt
         return Quaternion.fromAxisAngle( gyro, angle )
 
+    def get_acel_vect(self):
+        try:
+            ax,ay,az, gx, gy, gz = self.sub.get()
+        except UDPComms.timeout:
+            return None
 
-q = Quaternion.fromAxisAngle( [0,0,1], 0 )
-imu = IMU()
-display = Display()
-
-while 1:
-    q =  q @ imu.get_quat()
-    display.plot_quat(q)
-    plt.pause(0.01)
+        return np.array([ax, ay, az])
 
 
-# plt.show()
+class Integrator:
+    def __init__(self):
+        self.q = Quaternion.fromAxisAngle( [0,0,1], 0 )
+
+    def update_gyro(self, gyro_quat):
+        self.q =  self.q @ gyro_quat
+
+    def update_acel(self, accel_vect):
+        if accel_vect is None:
+            return
+        sim = self.q.rotate( [0,0,-1] )
+
+        print("sim", sim)
+        print("acl", accel_vect)
+
+        dot_product =  np.sum(sim * accel_vect) / np.linalg.norm(sim) / np.linalg.norm(accel_vect)
+        angle = np.arccos(dot_product)
+
+        axis = np.cross(sim, accel_vect)
+
+        print(axis)
+        print(angle)
+
+        offset = Quaternion.fromAxisAngle(axis, 0.01*angle)
+        self.q =  self.q @ offset
+
+
+    def quat(self):
+        return self.q
+
+if __name__ == "__main__":
+    imu = IMU()
+    display = Display()
+    filt = Integrator()
+
+    while 1:
+        filt.update_gyro( imu.get_gyro_quat() )
+        # filt.update_acel( imu.get_acel_vect() )
+        display.plot_quat( filt.quat() )
+        plt.pause(0.01)
+
