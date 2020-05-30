@@ -111,22 +111,19 @@ class Integrator:
         self.q =  self.q @ gyro_quat
 
     def update_acel(self, accel_vect):
+        alpha = 0.01
+
         if accel_vect is None:
             return
-        sim = self.q.rotate( [0,0,-1] )
-
-        print("sim", sim)
-        print("acl", accel_vect)
+        sim = self.q.T.rotate( [0,0,-1] )
 
         dot_product =  np.sum(sim * accel_vect) / np.linalg.norm(sim) / np.linalg.norm(accel_vect)
         angle = np.arccos(dot_product)
 
-        axis = np.cross(sim, accel_vect)
+        # to modify the sim we go from the real to simulated gravity vector
+        axis = np.cross(accel_vect, sim)
 
-        print(axis)
-        print(angle)
-
-        offset = Quaternion.fromAxisAngle(axis, 0.01*angle)
+        offset = Quaternion.fromAxisAngle(axis, alpha*angle)
         self.q =  self.q @ offset
 
 
@@ -140,7 +137,7 @@ if __name__ == "__main__":
 
     while 1:
         filt.update_gyro( imu.get_gyro_quat() )
-        # filt.update_acel( imu.get_acel_vect() )
+        filt.update_acel( imu.get_acel_vect() )
         display.plot_quat( filt.quat() )
         plt.pause(0.01)
 
