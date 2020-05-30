@@ -13,6 +13,11 @@ import time
 class Quaternion:
 
     @classmethod
+    def fromNudge(cls, nudge):
+        w = np.sqrt(1 - np.linalg.norm(nudge))
+        return Quaternion( [w, nudge[0], nudge[1], nudge[2]] )
+
+    @classmethod
     def fromAxisAngle(cls, axis, angle):
         axis = axis/np.linalg.norm(axis)
         c = np.cos(angle/2)
@@ -142,10 +147,59 @@ class ComplementaryFilter:
     def quat(self):
         return self.q
 
+class MEKF:
+    def __init__(self):
+        self.q = Quaternion.fromAxisAngle( [0,0,1], 0 )
+        self.sigma = 1*np.eye(3)
+
+        self.Q = 0.1*np.eye(3)
+        self.R = 0.1*np.eye(3)
+
+    def update_gyro(self, gyro_quat):
+        self.q =  self.q @ gyro_quat
+
+        # A = RotationMatrix(gyro_quat)
+        x,y,z = gyro_quat.q[1:]
+        A = (gyro_quat.q[0]**2 - np.linalg.norm(gyro_quat.q[1:])) * np.eye(3) \
+                + 2 * np.outer(gyro_quat.q[1:], gyro_quat.q[1:]) \
+                - 2 * gyro_quat.q[0] * np.array ([[ 0,-z, y],
+                                                [ z, 0,-x],
+                                                [-y, z, 0]])
+
+        self.sigma = A @ self.sigma @ A.T + self.Q
+
+    def update_acel(self, accel_vect):
+        if accel_vect is None:
+            return
+        sim = self.q.T.rotate( [0,0,-9.81] )
+
+        x,y,z = sim
+        C = np.array ([[ 0,-z, y],
+                       [ z, 0,-x],
+                       [-y, z, 0]])
+
+
+        print("start")
+        print(self.sigma)
+        print(C.T)
+        K = self.sigma @ C.T @ np.linalg.inv(C @ self.sigma @ C.T + self.R)
+        print(K)
+
+        nudge = K@(accel_vect - sim)
+        print(nudge)
+
+        self.q = self.q @ Quaternion.fromNudge(nudge)
+        self.sigma = self.sigma - K @ C @ self.sigma
+
+
+    def quat(self):
+        return self.q
+
 if __name__ == "__main__":
     imu = IMU()
     display = Display()
-    filt = ComplementaryFilter()
+    # filt = ComplementaryFilter()
+    filt = MEKF()
 
     while 1:
         filt.update_gyro( imu.get_gyro_quat() )
