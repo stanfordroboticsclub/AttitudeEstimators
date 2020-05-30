@@ -62,7 +62,10 @@ class Display:
                       [-1,-2, 0],
                       [ 1, 2, 0],
                       [ 1,-2, 0]]
+        self.arrow = [0,0,1]
         self.s = None
+        self.a = None
+
 
     def plot_quat(self,q):
         verts = [q.rotate(v) for v in self.verts]
@@ -73,7 +76,16 @@ class Display:
 
         if self.s != None:
             self.s.remove()
-        self.s = self.ax.plot_surface(x, y, z, linewidth=0, color='r',zorder=2)
+        if self.a != None:
+            self.a.remove()
+
+        self.s = self.ax.plot_surface(x, y, z,
+                    linewidth=0, color='r',zorder=2, alpha=0.8)
+        arrow = q.rotate(self.arrow)
+        self.a = self.ax.quiver(
+            0, 0, 0,
+            *arrow,
+            color = 'blue', alpha = .8, lw = 3,zorder = 3)
 
 
 class IMU:
@@ -103,7 +115,7 @@ class IMU:
         return np.array([ax, ay, az])
 
 
-class Integrator:
+class ComplementaryFilter:
     def __init__(self):
         self.q = Quaternion.fromAxisAngle( [0,0,1], 0 )
 
@@ -133,7 +145,7 @@ class Integrator:
 if __name__ == "__main__":
     imu = IMU()
     display = Display()
-    filt = Integrator()
+    filt = ComplementaryFilter()
 
     while 1:
         filt.update_gyro( imu.get_gyro_quat() )
