@@ -14,7 +14,7 @@ class Quaternion:
 
     @classmethod
     def fromNudge(cls, nudge):
-        w = np.sqrt(1 - np.linalg.norm(nudge))
+        w = np.sqrt(1 - np.linalg.norm(nudge)**2)
         return Quaternion( [w, nudge[0], nudge[1], nudge[2]] )
 
     @classmethod
@@ -39,6 +39,23 @@ class Quaternion:
     def T(self):
         w, x, y, z = self.q
         return Quaternion([w, -x, -y, -z])
+
+    def get_matrix(self):
+        w = self.q[0]
+        v = self.q[1:]
+
+        return (w**2 - np.linalg.norm(v)**2) * np.eye(3) \
+                    + 2 * np.outer(v, v) \
+                    - 2 * w * self.skew_matrix(v)
+
+    @staticmethod
+    def skew_matrix(v):
+        # also the cross product matrix
+        x, y, z = v
+        return np.array ([[ 0,-z, y],
+                          [ z, 0,-x],
+                          [-y, z, 0]])
+
 
     def rotate(self, vector):
         assert len(vector) == 3
@@ -150,43 +167,40 @@ class ComplementaryFilter:
 class MEKF:
     def __init__(self):
         self.q = Quaternion.fromAxisAngle( [0,0,1], 0 )
-        self.sigma = 1*np.eye(3)
+        self.sigma = 0.1*np.eye(3)
 
-        self.Q = 0.1*np.eye(3)
-        self.R = 0.1*np.eye(3)
+        self.Q = 0.02 * np.eye(3) * 0.05
+        self.R = 0.01  * np.eye(3)
 
     def update_gyro(self, gyro_quat):
+        A = gyro_quat.get_matrix()
+
         self.q =  self.q @ gyro_quat
-
-        # A = RotationMatrix(gyro_quat)
-        x,y,z = gyro_quat.q[1:]
-        A = (gyro_quat.q[0]**2 - np.linalg.norm(gyro_quat.q[1:])) * np.eye(3) \
-                + 2 * np.outer(gyro_quat.q[1:], gyro_quat.q[1:]) \
-                - 2 * gyro_quat.q[0] * np.array ([[ 0,-z, y],
-                                                [ z, 0,-x],
-                                                [-y, z, 0]])
-
         self.sigma = A @ self.sigma @ A.T + self.Q
 
     def update_acel(self, accel_vect):
         if accel_vect is None:
             return
-        sim = self.q.T.rotate( [0,0,-9.81] )
 
-        x,y,z = sim
-        C = np.array ([[ 0,-z, y],
-                       [ z, 0,-x],
-                       [-y, z, 0]])
+        # sim = self.q.T.rotate( [0,0,-9.81] )
+        sim = self.q.T.rotate( [0,0,-1] )
 
+        accel_vect = accel_vect/np.linalg.norm(accel_vect)
+        print("sim",sim)
+        print("accel", accel_vect)
+
+        # has nothing to do with quaternion
+        # just using a convenience fucntion
+        C = Quaternion.skew_matrix(sim)
 
         print("start")
-        print(self.sigma)
-        print(C.T)
+        print("sigma", self.sigma)
+        print("C", C)
         K = self.sigma @ C.T @ np.linalg.inv(C @ self.sigma @ C.T + self.R)
-        print(K)
+        print("K",K)
 
         nudge = K@(accel_vect - sim)
-        print(nudge)
+        print("nudge",nudge)
 
         self.q = self.q @ Quaternion.fromNudge(nudge)
         self.sigma = self.sigma - K @ C @ self.sigma
