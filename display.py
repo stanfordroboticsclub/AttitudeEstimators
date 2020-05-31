@@ -137,9 +137,7 @@ class IMU:
         dt = time.time() - self.last_time
         print(dt)
         self.last_time = time.time()
-        gyro = [gx, gy, gz]
-        angle = np.linalg.norm(gyro) * dt
-        return Quaternion.fromAxisAngle( gyro, angle )
+        return Quaternion.fromGyro( [gx,gy,gz], dt)
 
     def get_gyro_vect(self):
         try:
@@ -164,7 +162,8 @@ class ComplementaryFilter:
     def __init__(self):
         self.q = Quaternion.Identity()
 
-    def update_gyro(self, gyro_quat):
+    def update_gyro(self, w, dt):
+        gyro_quat = Quaternion.fromGyro(w, dt)
         self.q =  self.q @ gyro_quat
 
     def update_acel(self, accel_vect):
