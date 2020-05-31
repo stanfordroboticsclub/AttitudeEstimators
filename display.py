@@ -46,7 +46,7 @@ class Quaternion:
 
         return (w**2 - np.linalg.norm(v)**2) * np.eye(3) \
                     + 2 * np.outer(v, v) \
-                    - 2 * w * self.skew_matrix(v)
+                    + 2 * w * self.skew_matrix(v)
 
     @staticmethod
     def skew_matrix(v):
