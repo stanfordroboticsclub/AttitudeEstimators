@@ -170,7 +170,7 @@ class MEKF:
         self.sigma = 0.1*np.eye(3)
 
         self.Q = 0.02 * np.eye(3) * 0.05
-        self.R = 1  * np.eye(3)
+        self.R = 10  * np.eye(3)
 
     def update_gyro(self, gyro_quat):
         A = gyro_quat.get_matrix()
@@ -182,16 +182,18 @@ class MEKF:
         if accel_vect is None:
             return
 
+        # unsure why it works best with gravity vectors of length 1
         # sim = self.q.T.rotate( [0,0,-9.8] )
-
         sim = self.q.T.rotate( [0,0,-1] )
+        # sim = self.q.T.rotate( [0,0,-1] ) * np.linalg.norm(accel_vect)
         accel_vect = accel_vect/np.linalg.norm(accel_vect)
+        # accel_vect = accel_vect/9.8
 
         print("sim",sim)
         print("accel", accel_vect)
 
         # has nothing to do with quaternion
-        # just using a convenience fucntion
+        # just using a convenience function
         C = 2*Quaternion.skew_matrix(sim)
 
         print("start")
