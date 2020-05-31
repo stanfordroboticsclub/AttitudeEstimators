@@ -13,12 +13,23 @@ import time
 class Quaternion:
 
     @classmethod
+    def Identity(cls):
+        return Quaternion( [1, 0, 0, 0] )
+
+    @classmethod
+    def fromGyro(cls, w, dt):
+        angle = np.linalg.norm(w) * dt
+        return Quaternion.fromAxisAngle( w, angle )
+
+    @classmethod
     def fromNudge(cls, nudge):
         w = np.sqrt(1 - np.linalg.norm(nudge)**2)
         return Quaternion( [w, nudge[0], nudge[1], nudge[2]] )
 
     @classmethod
     def fromAxisAngle(cls, axis, angle):
+        if(angle == 0):
+            return Quaternion.Identity()
         axis = axis/np.linalg.norm(axis)
         c = np.cos(angle/2)
         s = np.sin(angle/2)
@@ -130,6 +141,16 @@ class IMU:
         angle = np.linalg.norm(gyro) * dt
         return Quaternion.fromAxisAngle( gyro, angle )
 
+    def get_gyro_vect(self):
+        try:
+            ax,ay,az, gx, gy, gz = self.sub.get()
+        except UDPComms.timeout:
+            return [0,0,0], 0
+        dt = time.time() - self.last_time
+        print(dt)
+        self.last_time = time.time()
+        return [gx, gy, gz], dt
+
     def get_acel_vect(self):
         try:
             ax,ay,az, gx, gy, gz = self.sub.get()
@@ -141,7 +162,7 @@ class IMU:
 
 class ComplementaryFilter:
     def __init__(self):
-        self.q = Quaternion.fromAxisAngle( [0,0,1], 0 )
+        self.q = Quaternion.Identity()
 
     def update_gyro(self, gyro_quat):
         self.q =  self.q @ gyro_quat
@@ -168,15 +189,26 @@ class ComplementaryFilter:
 
 class MEKF:
     def __init__(self):
-        self.q = Quaternion.fromAxisAngle( [0,0,1], 0 )
-        self.sigma = 0.1*np.eye(3)
+        self.q = Quaternion.Identity()
 
-        self.Q = 0.02 * np.eye(3) * 0.05
+        self.bias = np.array([0.0,0.0,0.0])
+
+        self.sigma = np.diag([0.1, 0.1, 0.1, 0.01, 0.01, 0.01])
+
+        # self.Q = 0.02 * np.eye(6) * 0.05
+        self.Q = np.diag( [0.02 * 0.05] * 3 + [1e-12]*3 )
         self.R = 10  * np.eye(3)
 
-    def update_gyro(self, gyro_quat):
-        A = gyro_quat.get_matrix()
+    def update_gyro(self, w, dt):
 
+        gyro_quat = Quaternion.fromGyro( w - self.bias, dt)
+
+        # A = [[ Matrix, - 0.5 * dt * I], [0, I]]
+        A = np.block([[gyro_quat.get_matrix(), -0.5 * np.eye(3) * dt],
+                      [ np.zeros((3,3))     , np.eye(3)]])
+
+
+        # sketchy might need to change to doing it component wise
         self.q =  self.q @ gyro_quat
         self.sigma = A @ self.sigma @ A.T + self.Q
 
@@ -200,6 +232,7 @@ class MEKF:
         # has nothing to do with quaternion
         # just using a convenience function
         C = 2*Quaternion.skew_matrix(sim)
+        C = np.block( [[ C, np.zeros((3,3)) ]])
 
         print("start")
         print("sigma", self.sigma)
@@ -207,8 +240,16 @@ class MEKF:
         K = self.sigma @ C.T @ np.linalg.inv(C @ self.sigma @ C.T + self.R)
         print("K",K)
 
-        nudge = K@(accel_vect - sim)
+        correction = K@(accel_vect - sim)
+        nudge = correction[:3]
+        bias_fix = correction[3:]
+
+        print(bias_fix.shape)
+
+        self.bias += bias_fix
+
         print("nudge",nudge)
+        print("bias", self.bias)
 
         self.q = self.q @ Quaternion.fromNudge(nudge)
         self.sigma = self.sigma - K @ C @ self.sigma
@@ -224,7 +265,7 @@ if __name__ == "__main__":
     filt = MEKF()
 
     while 1:
-        filt.update_gyro( imu.get_gyro_quat() )
+        filt.update_gyro( *imu.get_gyro_vect() )
         filt.update_acel( imu.get_acel_vect() )
         display.plot_quat( filt.quat() )
         plt.pause(0.01)
