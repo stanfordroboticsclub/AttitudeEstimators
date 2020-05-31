@@ -193,7 +193,7 @@ class MEKF:
 
         self.bias = np.array([0.0,0.0,0.0])
 
-        self.sigma = np.diag([0.1, 0.1, 0.1, 0.01, 0.01, 0.01])
+        self.sigma = np.diag([0.1, 0.1, 0.1, 0.5, 0.5, 0.5])
 
         # self.Q = 0.02 * np.eye(6) * 0.05
         self.Q = np.diag( [0.02 * 0.05] * 3 + [1e-12]*3 )
@@ -235,10 +235,10 @@ class MEKF:
         C = np.block( [[ C, np.zeros((3,3)) ]])
 
         print("start")
-        print("sigma", self.sigma)
-        print("C", C)
+        # print("sigma", self.sigma)
+        # print("C", C)
         K = self.sigma @ C.T @ np.linalg.inv(C @ self.sigma @ C.T + self.R)
-        print("K",K)
+        # print("K",K)
 
         correction = K@(accel_vect - sim)
         nudge = correction[:3]
@@ -248,7 +248,8 @@ class MEKF:
 
         self.bias += bias_fix
 
-        print("nudge",nudge)
+        # print("nudge",nudge)
+        print("covars", np.diag(self.sigma))
         print("bias", self.bias)
 
         self.q = self.q @ Quaternion.fromNudge(nudge)
