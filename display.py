@@ -56,6 +56,8 @@ class Quaternion:
                           [ z, 0,-x],
                           [-y, z, 0]])
 
+    def normalize(self):
+        return Quaternion( self.q / np.linalg.norm(self.q) )
 
     def rotate(self, vector):
         assert len(vector) == 3
@@ -177,6 +179,9 @@ class MEKF:
 
         self.q =  self.q @ gyro_quat
         self.sigma = A @ self.sigma @ A.T + self.Q
+
+        self.q = self.q.normalize()
+
 
     def update_acel(self, accel_vect):
         if accel_vect is None:
