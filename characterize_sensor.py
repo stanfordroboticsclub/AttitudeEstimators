@@ -6,9 +6,9 @@ import time
 
 
 def gather_data():
-    sub = UDPComms.Subscriber(8007, timeout=0.5)
+    sub = UDPComms.Subscriber(8004, timeout=0.5)
 
-    N = 1000
+    N = 1000 # dt on raspberry pi side is 0.01s = 100hz
     data = np.zeros((N, 6))
 
     i = 0
@@ -69,6 +69,6 @@ def plot_data():
 
 
 if __name__ == "__main__":
-    # gather_data()
-    # plot_data()
-    covariances()
+    gather_data()
+    plot_data()
+    # covariances()
