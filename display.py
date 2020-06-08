@@ -135,7 +135,7 @@ class IMU:
         except UDPComms.timeout:
             return Quaternion.fromAxisAngle( [0,0,1], 0)
         dt = time.time() - self.last_time
-        print(dt)
+        print("dt: ", dt)
         self.last_time = time.time()
         return Quaternion.fromGyro( [gx,gy,gz], dt)
 
@@ -145,7 +145,7 @@ class IMU:
         except UDPComms.timeout:
             return [0,0,0], 0
         dt = time.time() - self.last_time
-        print(dt)
+        print("dt: ", dt)
         self.last_time = time.time()
         return [gx, gy, gz], dt
 
@@ -167,7 +167,7 @@ class ComplementaryFilter:
         self.q =  self.q @ gyro_quat
 
     def update_acel(self, accel_vect):
-        alpha = 0.01
+        alpha = 0.3
 
         if accel_vect is None:
             return
@@ -195,8 +195,8 @@ class MEKF:
         self.sigma = np.diag([0.1, 0.1, 0.1, 0.5, 0.5, 0.5])
 
         # self.Q = 0.02 * np.eye(6) * 0.05
-        self.Q = np.diag( [0.02 * 0.05] * 3 + [1e-12]*3 )
-        self.R = 10  * np.eye(3)
+        self.Q = np.diag( [0.02 * 0.05] * 3 + [1e-9]*3 )
+        self.R = 100  * np.eye(3)
 
     def update_gyro(self, w, dt):
 
@@ -264,9 +264,15 @@ if __name__ == "__main__":
     # filt = ComplementaryFilter()
     filt = MEKF()
 
+    t = 0
+
     while 1:
         filt.update_gyro( *imu.get_gyro_vect() )
         filt.update_acel( imu.get_acel_vect() )
-        display.plot_quat( filt.quat() )
+
+        if t % 5 == 0:
+            display.plot_quat( filt.quat() )
+        
         plt.pause(0.01)
+        t += 1
 
