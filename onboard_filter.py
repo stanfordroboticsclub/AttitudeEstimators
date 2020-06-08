@@ -17,14 +17,15 @@ def clean_sensor_data(gyro, accel, bias):
 
 if __name__ == "__main__":
     imu = IMU()
-    filt_comp = ComplementaryFilter()
-    filt_mekf = MEKF()
+    filt_comp = ComplementaryFilter(alpha=0.01)
+    filt_mekf = MEKF(Q_gyro=1e-6, Q_bias=1e-12, R=1)
 
     comp_pub = Publisher(8007)
     mekf_pub = Publisher(8008)
     sensor = mpu6050(0x68)
+    sensor.set_gyro_range(mpu6050.GYRO_RANGE_2000DEG)
 
-    DT = 0.01
+    DT = 0.005
 
     last_update = time.time()
     t = 0

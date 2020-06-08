@@ -2,9 +2,9 @@ from UDPComms import Publisher
 import time
 from mpu6050 import mpu6050
 
-pub = Publisher(8007)
+pub = Publisher(8004)
 sensor = mpu6050(0x68)
-
+sensor.set_gyro_range(mpu6050.GYRO_RANGE_2000DEG)
 last_send = time.time()
 
 bias = sensor.get_gyro_data()
