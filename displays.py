@@ -8,7 +8,7 @@ class StaticDisplay:
     def __init__(self, quat=True):
         self.dim = 4 if quat else 3
         if quat:
-            self.axis_names = ['w', 'x', 'y', 'z']
+            self.axis_names = ['qw', 'qx', 'qy', 'qz']
         else:
             self.axis_names = ['yaw', 'pitch', 'roll']
         self.start_time = time.time()
@@ -26,9 +26,10 @@ class StaticDisplay:
         self.filtered = np.array(self.filtered)
         self.gt = np.array(self.gt)
         for i in range(self.dim):
-            self.ax[i].plot(self.timestamps, self.filtered[:,i])
-            self.ax[i].plot(self.timestamps, self.gt[:,i])
+            self.ax[i].plot(self.timestamps, self.filtered[:,i], label="filtered")
+            self.ax[i].plot(self.timestamps, self.gt[:,i], label="ground truth")
             self.ax[i].set_ylabel(self.axis_names[i])
+            self.ax[i].legend()
         plt.show()
         
 class DynamicDisplay:
